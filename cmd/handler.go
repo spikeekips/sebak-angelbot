@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,9 +12,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stellar/go/keypair"
 
-	"boscoin.io/sebak/lib"
+	"boscoin.io/sebak/lib/block"
 	"boscoin.io/sebak/lib/common"
 	"boscoin.io/sebak/lib/error"
+	"boscoin.io/sebak/lib/transaction"
+	"boscoin.io/sebak/lib/transaction/operation"
 )
 
 const (
@@ -25,12 +26,12 @@ const (
 
 type Handler struct {
 	kp            *keypair.Full
-	sebakEndpoint *sebakcommon.Endpoint
+	sebakEndpoint *common.Endpoint
 	networkID     []byte
 }
 
-func getHTTP2Client() *sebakcommon.HTTP2Client {
-	h2c, _ := sebakcommon.NewHTTP2Client(
+func getHTTP2Client() *common.HTTP2Client {
+	h2c, _ := common.NewHTTP2Client(
 		3*time.Second,
 		3*time.Second,
 		false,
@@ -68,7 +69,7 @@ func (h *Handler) sendMessage(method, path string, message []byte) (b []byte, er
 		if verbose {
 			log.Debug("failed to get response", "error", response)
 		}
-		err = sebakerror.ErrorBlockAccountDoesNotExists
+		err = errors.ErrorBlockAccountDoesNotExists
 		return
 	}
 
@@ -82,13 +83,13 @@ func (h *Handler) sendMessage(method, path string, message []byte) (b []byte, er
 	return
 }
 
-func (h *Handler) getAccount(address string) (ba *sebak.BlockAccount, err error) {
+func (h *Handler) getAccount(address string) (ba *block.BlockAccount, err error) {
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
 
 	var retBody []byte
-	if retBody, err = h.sendMessage("GET", "/api/account/"+address, []byte{}); err != nil {
-		err = sebakerror.ErrorBlockAccountDoesNotExists
+	if retBody, err = h.sendMessage("GET", "/api/v1/accounts/"+address, []byte{}); err != nil {
+		err = errors.ErrorBlockAccountDoesNotExists
 	}
 
 	if err = json.Unmarshal(retBody, &ba); err != nil {
@@ -101,30 +102,30 @@ func (h *Handler) getAccount(address string) (ba *sebak.BlockAccount, err error)
 	return
 }
 
-func (h *Handler) createAccount(w http.ResponseWriter, ba *sebak.BlockAccount, address string, balance sebak.Amount, timeout time.Duration) (
-	baCreated *sebak.BlockAccount,
+func (h *Handler) createAccount(w http.ResponseWriter, ba *block.BlockAccount, address string, balance common.Amount, timeout time.Duration) (
+	baCreated *block.BlockAccount,
 	err error,
 ) {
 	// send tx for create-account
-	opb := sebak.NewOperationBodyCreateAccount(address, balance)
-	op := sebak.Operation{
-		H: sebak.OperationHeader{
-			Type: sebak.OperationCreateAccount,
+	opb := operation.NewCreateAccount(address, balance, "")
+	op := operation.Operation{
+		H: operation.Header{
+			Type: operation.TypeCreateAccount,
 		},
 		B: opb,
 	}
 
-	txBody := sebak.TransactionBody{
+	txBody := transaction.Body{
 		Source:     kp.Address(),
-		Fee:        sebak.Amount(sebak.BaseFee),
-		Checkpoint: ba.Checkpoint,
-		Operations: []sebak.Operation{op},
+		Fee:        common.Amount(common.BaseFee),
+		SequenceID: ba.SequenceID,
+		Operations: []operation.Operation{op},
 	}
 
-	tx := sebak.Transaction{
+	tx := transaction.Transaction{
 		T: "transaction",
-		H: sebak.TransactionHeader{
-			Created: sebakcommon.NowISO8601(),
+		H: transaction.Header{
+			Created: common.NowISO8601(),
 			Hash:    txBody.MakeHashString(),
 		},
 		B: txBody,
@@ -163,8 +164,8 @@ func (h *Handler) createAccount(w http.ResponseWriter, ba *sebak.BlockAccount, a
 
 			// check BlockTransactionHistory
 			if baCreated, err = h.getAccount(address); err == nil {
-				if sebak.MustAmountFromString(baCreated.Balance) != balance {
-					err = errors.New("failed to create account")
+				if baCreated.Balance != balance {
+					err = fmt.Errorf("failed to create account")
 					log.Error(
 						"failed to create new account, balance mismatch",
 						"address", address,
@@ -198,13 +199,18 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	// balance
-	balance := sebak.Amount(baseBalance)
+	balance := common.Amount(baseBalance)
 	if balanceString, found := r.URL.Query()["balance"]; found && len(balanceString) > 0 && len(balanceString[0]) > 0 {
-		if balance, err = sebak.AmountFromString(balanceString[0]); err != nil {
+		if balance, err = common.AmountFromString(balanceString[0]); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
+	if balance < common.BaseReserve {
+		http.Error(w, fmt.Sprintf("lower than `BaseReserve`, %d", common.BaseReserve), http.StatusBadRequest)
+		return
+	}
+
 	// timeout
 	timeout := defaultWaitTimeout
 	if timeoutString, found := r.URL.Query()["timeout"]; found && len(timeoutString) > 0 && len(timeoutString[0]) > 0 {
@@ -233,14 +239,14 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var baMaster *sebak.BlockAccount
+	var baMaster *block.BlockAccount
 	if baMaster, err = h.getAccount(kp.Address()); err != nil {
-		log.Debug("failed to get master account")
+		log.Debug("failed to get master account", "address", kp.Address())
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusBadRequest)
 		return
 	}
 
-	var baCreated *sebak.BlockAccount
+	var baCreated *block.BlockAccount
 	if baCreated, err = h.createAccount(w, baMaster, address, balance, timeout); err != nil {
 		log.Error(err.Error(), "address", address)
 		http.Error(w, err.Error(), http.StatusBadRequest)

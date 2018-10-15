@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -13,36 +14,37 @@ import (
 	"github.com/stellar/go/keypair"
 	"golang.org/x/net/http2"
 
-	"boscoin.io/sebak/cmd/sebak/common"
-	"boscoin.io/sebak/lib"
+	cmdcommon "boscoin.io/sebak/cmd/sebak/common"
 	"boscoin.io/sebak/lib/common"
 	"boscoin.io/sebak/lib/network"
+	"boscoin.io/sebak/lib/node"
 )
 
 const (
 	defaultSEBAKEndpoint string      = "https://localhost:12345"
-	defaultBind          string      = "localhost:23456"
+	defaultBind          string      = "http://localhost:23456"
 	defaultHost          string      = "0.0.0.0"
 	defaultLogLevel      logging.Lvl = logging.LvlInfo
 )
 
 var (
-	flagSecretSeed          string = sebakcommon.GetENVValue("SEBAK_SECRET_SEED", "")
-	flagNetworkID           string = sebakcommon.GetENVValue("SEBAK_NETWORK_ID", "")
-	flagLogLevel            string = sebakcommon.GetENVValue("SEBAK_LOG_LEVEL", defaultLogLevel.String())
-	flagLogOutput           string = sebakcommon.GetENVValue("SEBAK_LOG_OUTPUT", "")
-	flagVerbose             bool   = sebakcommon.GetENVValue("SEBAK_VERBOSE", "0") == "1"
-	flagBind                string = sebakcommon.GetENVValue("SEBAK_BIND", defaultBind)
-	flagSEBAKEndpointString string = sebakcommon.GetENVValue("SEBAK_SEBAK_ENDPOINT", defaultSEBAKEndpoint)
-	flagTLSCertFile         string = sebakcommon.GetENVValue("SEBAK_TLS_CERT", "sebak.crt")
-	flagTLSKeyFile          string = sebakcommon.GetENVValue("SEBAK_TLS_KEY", "sebak.key")
+	flagSecretSeed          string = common.GetENVValue("SEBAK_SECRET_SEED", "")
+	flagNetworkID           string = common.GetENVValue("SEBAK_NETWORK_ID", "")
+	flagLogLevel            string = common.GetENVValue("SEBAK_LOG_LEVEL", defaultLogLevel.String())
+	flagLogOutput           string = common.GetENVValue("SEBAK_LOG_OUTPUT", "")
+	flagVerbose             bool   = common.GetENVValue("SEBAK_VERBOSE", "0") == "1"
+	flagBind                string = common.GetENVValue("SEBAK_BIND", defaultBind)
+	flagSEBAKEndpointString string = common.GetENVValue("SEBAK_SEBAK_ENDPOINT", defaultSEBAKEndpoint)
+	flagTLSCertFile         string = common.GetENVValue("SEBAK_TLS_CERT", "sebak.crt")
+	flagTLSKeyFile          string = common.GetENVValue("SEBAK_TLS_KEY", "sebak.key")
 )
 
 var (
 	runCmd *cobra.Command
 
 	kp            *keypair.Full
-	sebakEndpoint *sebakcommon.Endpoint
+	sebakEndpoint *common.Endpoint
+	bindURL       *url.URL
 	logLevel      logging.Lvl
 	log           logging.Logger
 	verbose       bool
@@ -78,43 +80,49 @@ func parseFlagsNode() {
 	var err error
 
 	if len(flagNetworkID) < 1 {
-		common.PrintFlagsError(runCmd, "--network-id", errors.New("must be given"))
+		cmdcommon.PrintFlagsError(runCmd, "--network-id", errors.New("must be given"))
 	}
 	if len(flagSecretSeed) < 1 {
-		common.PrintFlagsError(runCmd, "--secret-seed", errors.New("must be given"))
+		cmdcommon.PrintFlagsError(runCmd, "--secret-seed", errors.New("must be given"))
 	}
 
 	var parsedKP keypair.KP
 	parsedKP, err = keypair.Parse(flagSecretSeed)
 	if err != nil {
-		common.PrintFlagsError(runCmd, "--secret-seed", err)
+		cmdcommon.PrintFlagsError(runCmd, "--secret-seed", err)
 	} else {
 		kp = parsedKP.(*keypair.Full)
 	}
 
-	if p, err := sebakcommon.ParseNodeEndpoint(flagSEBAKEndpointString); err != nil {
-		common.PrintFlagsError(runCmd, "--endpoint", err)
+	if bindURL, err = url.Parse(flagBind); err != nil {
+		cmdcommon.PrintFlagsError(runCmd, "--bind", err)
+	}
+
+	if p, err := common.ParseEndpoint(flagSEBAKEndpointString); err != nil {
+		cmdcommon.PrintFlagsError(runCmd, "--endpoint", err)
 	} else {
 		sebakEndpoint = p
 		flagSEBAKEndpointString = sebakEndpoint.String()
 	}
 
-	if _, err = os.Stat(flagTLSCertFile); os.IsNotExist(err) {
-		common.PrintFlagsError(runCmd, "--tls-cert", err)
-	}
-	if _, err = os.Stat(flagTLSKeyFile); os.IsNotExist(err) {
-		common.PrintFlagsError(runCmd, "--tls-key", err)
+	if bindURL.Scheme == "https" {
+		if _, err = os.Stat(flagTLSCertFile); os.IsNotExist(err) {
+			cmdcommon.PrintFlagsError(runCmd, "--tls-cert", err)
+		}
+		if _, err = os.Stat(flagTLSKeyFile); os.IsNotExist(err) {
+			cmdcommon.PrintFlagsError(runCmd, "--tls-key", err)
+		}
 	}
 
 	queries := sebakEndpoint.Query()
 	queries.Add("TLSCertFile", flagTLSCertFile)
 	queries.Add("TLSKeyFile", flagTLSKeyFile)
 	queries.Add("IdleTimeout", "3s")
-	queries.Add("NodeName", sebakcommon.MakeAlias(kp.Address()))
+	queries.Add("NodeName", node.MakeAlias(kp.Address()))
 	sebakEndpoint.RawQuery = queries.Encode()
 
 	if logLevel, err = logging.LvlFromString(flagLogLevel); err != nil {
-		common.PrintFlagsError(runCmd, "--log-level", err)
+		cmdcommon.PrintFlagsError(runCmd, "--log-level", err)
 	}
 
 	logHandler := logging.StdoutHandler
@@ -123,13 +131,13 @@ func parseFlagsNode() {
 		flagLogOutput = "<stdout>"
 	} else {
 		if logHandler, err = logging.FileHandler(flagLogOutput, logging.JsonFormat()); err != nil {
-			common.PrintFlagsError(runCmd, "--log-output", err)
+			cmdcommon.PrintFlagsError(runCmd, "--log-output", err)
 		}
 	}
 
 	log = logging.New("module", "main")
 	log.SetHandler(logging.LvlFilterHandler(logLevel, logHandler))
-	sebak.SetLogging(logLevel, logHandler)
+	network.SetLogging(logLevel, logHandler)
 
 	log.Info("Starting sebak angelbot")
 
@@ -146,14 +154,14 @@ func parseFlagsNode() {
 	log.Debug("parsed flags:", parsedFlags...)
 
 	// check node status
-	http2Client, _ := sebakcommon.NewHTTP2Client(
+	http2Client, _ := common.NewHTTP2Client(
 		3*time.Second,
 		3*time.Second,
 		false,
 	)
-	client := sebaknetwork.NewHTTP2NetworkClient(sebakEndpoint, http2Client)
+	client := network.NewHTTP2NetworkClient(sebakEndpoint, http2Client)
 	if _, err := client.GetNodeInfo(); err != nil {
-		common.PrintFlagsError(runCmd, "--sebak-endpoint", err)
+		cmdcommon.PrintFlagsError(runCmd, "--sebak-endpoint", err)
 	}
 
 	if flagVerbose {
@@ -163,7 +171,7 @@ func parseFlagsNode() {
 }
 
 func run() {
-	server := &http.Server{Addr: flagBind}
+	server := &http.Server{Addr: bindURL.Host}
 	server.SetKeepAlivesEnabled(false)
 
 	http2.ConfigureServer(server, &http2.Server{})
@@ -177,7 +185,13 @@ func run() {
 	router.HandleFunc("/account/{address}", handler.accountHandler).Methods("POST")
 	server.Handler = handlers.CombinedLoggingHandler(os.Stdout, router)
 
-	log.Crit("something wrong", "error", server.ListenAndServeTLS(flagTLSCertFile, flagTLSKeyFile))
+	var err error
+	if bindURL.Scheme == "https" {
+		err = server.ListenAndServeTLS(flagTLSCertFile, flagTLSKeyFile)
+	} else {
+		err = server.ListenAndServe()
+	}
+	log.Crit("something wrong", "error", err)
 
 	return
 }

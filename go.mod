@@ -1,31 +1,12 @@
 module github.com/spikeekips/sebak-angelbot
 
 require (
-	boscoin.io/sebak v0.0.0-20180628220218-0c1de3a745ee
-	github.com/GianlucaGuarini/go-observable v0.0.0-20171228155646-e39e699e0a00
-	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
-	github.com/btcsuite/btcutil v0.0.0-20180524032703-d4cc87b86016
-	github.com/ethereum/go-ethereum v1.8.11
-	github.com/go-stack/stack v1.7.0
-	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
-	github.com/google/uuid v0.0.0-20161128191214-064e2069ce9c
-	github.com/gorilla/context v1.1.1
-	github.com/gorilla/handlers v1.3.0
+	boscoin.io/sebak v0.0.0-20181015054123-718f45d3cdef
+	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.6.2
-	github.com/inconshreveable/log15 v0.0.0-20171019012758-0decfc6c20d9
-	github.com/inconshreveable/mousetrap v1.0.0
-	github.com/lib/pq v0.0.0-20180523175426-90697d60dd84
-	github.com/mattn/go-colorable v0.0.9
-	github.com/mattn/go-isatty v0.0.3
-	github.com/nullstyle/go-xdr v0.0.0-20170810174627-a875e7c9fa23
-	github.com/pkg/errors v0.8.0
-	github.com/satori/go.uuid v1.2.0
+	github.com/inconshreveable/log15 v0.0.0-20180818164646-67afb5ed74ec
 	github.com/spf13/cobra v0.0.3
-	github.com/spf13/pflag v1.0.1
-	github.com/stellar/go v0.0.0-20180628175035-49c19db586af
-	github.com/syndtr/goleveldb v0.0.0-20180621010148-0d5a0ceb10cf
-	golang.org/x/crypto v0.0.0-20180621125126-a49355c7e3f8
-	golang.org/x/net v0.0.0-20180628222318-97aa3a539ec7
-	golang.org/x/sys v0.0.0-20180627142611-7138fd3d9dc8
-	golang.org/x/text v0.3.0
+	github.com/stellar/go v0.0.0-20181008142645-92db8e1f6fa5
+	github.com/stellar/go-xdr v0.0.0-20180917104419-0bc96f33a18e // indirect
+	golang.org/x/net v0.0.0-20181011144130-49bb7cea24b1
 )

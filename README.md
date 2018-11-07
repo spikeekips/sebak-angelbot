@@ -16,20 +16,20 @@ $ go get github.com/spikeekips/sebak-angelbot
 
 If you environment is,
 
-* sebak node is running on: https://192.168.99.110:12000
+* sebak node is running on: https://localhost:12345
 * sebak node's secret seed: SBXBRFM4UDBHREM2XRM6IIOXNR52N6NAKWIMR7MR4XMNJ5VA4WC27QDY
-* sebak network network-id: test sebak-network
-* sebak-angelbot will be running on: https://localhost:8090
+* sebak network network-id: "test-sebak-network"
+* sebak-angelbot will be running on: https://localhost:23456
 
 ```
 $ sebak-anglebot run \
-	--bind localhost:8090 \
-	--network-id 'test sebak-network' \
+	--bind localhost:23456 \
+	--network-id 'test-sebak-network' \
 	--secret-seed SBXBRFM4UDBHREM2XRM6IIOXNR52N6NAKWIMR7MR4XMNJ5VA4WC27QDY \
 	--log-level debug \
 	--tls-cert ./sebak.crt \
 	--tls-key ./sebak.key  \
-	--sebak-endpoint https://192.168.99.110:12000 \
+	--sebak-endpoint https://localhost:12345 \
     $*
 ```
 
@@ -37,8 +37,8 @@ $ sebak-anglebot run \
 
 Just send a transaction to angelbot. If you want to create new account that has,
 
-* address: GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M
-* initial balance: 100,000 BOS
+* Address: GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M
+* Initial balance: `100,000 BOS`(`1,000,000,000,000 GON`)
 
 ```
 $ time curl \
@@ -49,4 +49,25 @@ $ time curl \
     "https://localhost:8090/account/GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M"
 ```
 
-> You can set the initial balance by set the querystring, `?balance=999`.
+You can set the initial `balance` by querystring, `balance=9990000000`, `999 BOS`. The unit of balance is `GON`, not `BOS`.
+
+```
+$ time curl \
+    --insecure \
+    -s \
+    -XPOST \
+    -d '' \
+    "https://localhost:8090/account/GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M?balance=9990000000"
+```
+
+You can set the `timeout` by querystring, it will wait until when account is created.
+
+```
+$ time curl \
+    --insecure \
+    -s \
+    -XPOST \
+    -d '' \
+    "https://localhost:8090/account/GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M?balance=9990000000&timeout=1s"
+```
+> The timeout format can be found at https://golang.org/pkg/time/#ParseDuration .

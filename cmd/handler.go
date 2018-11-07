@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -14,13 +13,13 @@ import (
 
 	"boscoin.io/sebak/lib/block"
 	"boscoin.io/sebak/lib/common"
-	"boscoin.io/sebak/lib/error"
+	"boscoin.io/sebak/lib/errors"
+	"boscoin.io/sebak/lib/network/httputils"
 	"boscoin.io/sebak/lib/transaction"
 	"boscoin.io/sebak/lib/transaction/operation"
 )
 
 const (
-	baseBalance        int           = 1000000000000
 	defaultWaitTimeout time.Duration = 60 * time.Second
 )
 
@@ -69,7 +68,7 @@ func (h *Handler) sendMessage(method, path string, message []byte) (b []byte, er
 		if verbose {
 			log.Debug("failed to get response", "error", response)
 		}
-		err = errors.ErrorBlockAccountDoesNotExists
+		err = errors.BlockAccountDoesNotExists
 		return
 	}
 
@@ -89,7 +88,7 @@ func (h *Handler) getAccount(address string) (ba *block.BlockAccount, err error)
 
 	var retBody []byte
 	if retBody, err = h.sendMessage("GET", "/api/v1/accounts/"+address, []byte{}); err != nil {
-		err = errors.ErrorBlockAccountDoesNotExists
+		err = errors.BlockAccountDoesNotExists
 	}
 
 	if err = json.Unmarshal(retBody, &ba); err != nil {
@@ -123,7 +122,6 @@ func (h *Handler) createAccount(w http.ResponseWriter, ba *block.BlockAccount, a
 	}
 
 	tx := transaction.Transaction{
-		T: "transaction",
 		H: transaction.Header{
 			Created: common.NowISO8601(),
 			Hash:    txBody.MakeHashString(),
@@ -199,7 +197,7 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	// balance
-	balance := common.Amount(baseBalance)
+	balance := common.BaseReserve
 	if balanceString, found := r.URL.Query()["balance"]; found && len(balanceString) > 0 && len(balanceString[0]) > 0 {
 		if balance, err = common.AmountFromString(balanceString[0]); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -207,49 +205,47 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if balance < common.BaseReserve {
-		http.Error(w, fmt.Sprintf("lower than `BaseReserve`, %d", common.BaseReserve), http.StatusBadRequest)
+		httputils.WriteJSONError(w, errors.OperationAmountUnderflow)
 		return
 	}
 
 	// timeout
 	timeout := defaultWaitTimeout
 	if timeoutString, found := r.URL.Query()["timeout"]; found && len(timeoutString) > 0 && len(timeoutString[0]) > 0 {
-		if u, err := strconv.ParseUint(timeoutString[0], 10, 64); err != nil {
-			http.Error(w, "invalid `timeout`", http.StatusBadRequest)
+		if timeout, err = time.ParseDuration(timeoutString[0]); err != nil {
+			httputils.WriteJSONError(w, fmt.Errorf("invalid timeout format"))
 			return
-		} else {
-			timeout = time.Duration(u) * time.Millisecond
 		}
 	}
 
 	// check address is valid
 	var parsedKP keypair.KP
 	if parsedKP, err = keypair.Parse(address); err != nil {
-		http.Error(w, "found invalid address", http.StatusBadRequest)
+		httputils.WriteJSONError(w, err)
 		return
 	} else if _, ok := parsedKP.(*keypair.Full); ok {
-		http.Error(w, "don't provide secret seed; PLEASE!!!", http.StatusBadRequest)
+		httputils.WriteJSONError(w, fmt.Errorf("don't provide secret seed; PLEASE!!!"))
 		return
 	}
 
 	// check account exists
 	if _, err = h.getAccount(address); err == nil {
-		log.Debug("account is already exists")
 		http.Error(w, "account is already exists", http.StatusBadRequest)
+		httputils.WriteJSONError(w, errors.BlockAccountAlreadyExists)
 		return
 	}
 
 	var baMaster *block.BlockAccount
 	if baMaster, err = h.getAccount(kp.Address()); err != nil {
 		log.Debug("failed to get master account", "address", kp.Address())
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusBadRequest)
+		httputils.WriteJSONError(w, errors.BlockAccountDoesNotExists)
 		return
 	}
 
 	var baCreated *block.BlockAccount
 	if baCreated, err = h.createAccount(w, baMaster, address, balance, timeout); err != nil {
 		log.Error(err.Error(), "address", address)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		httputils.WriteJSONError(w, err)
 		return
 	}
 
@@ -257,16 +253,11 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	var body []byte
-	if body, err = baCreated.Serialize(); err != nil {
+	if body, err = common.JSONMarshalIndent(baCreated); err != nil {
 		log.Debug("failed to serialize BlockAccount", "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusBadRequest)
+		httputils.WriteJSONError(w, err)
 		return
 	}
 
-	_, err = w.Write(body)
-	if err != nil {
-		log.Debug("failed to write the response body", "error", err)
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
+	w.Write(append(body, []byte("\n")...))
 }

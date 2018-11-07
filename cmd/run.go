@@ -182,7 +182,7 @@ func run() {
 		networkID:     []byte(flagNetworkID),
 	}
 	router := mux.NewRouter()
-	router.HandleFunc("/account/{address}", handler.accountHandler).Methods("POST")
+	router.HandleFunc("/account/{address}", handler.accountHandler).Methods("POST", "GET", "OPTIONS")
 	server.Handler = handlers.CombinedLoggingHandler(os.Stdout, router)
 
 	var err error

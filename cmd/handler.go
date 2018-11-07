@@ -15,6 +15,7 @@ import (
 	"boscoin.io/sebak/lib/common"
 	"boscoin.io/sebak/lib/errors"
 	"boscoin.io/sebak/lib/network/httputils"
+	"boscoin.io/sebak/lib/node/runner/api/resource"
 	"boscoin.io/sebak/lib/transaction"
 	"boscoin.io/sebak/lib/transaction/operation"
 )
@@ -137,7 +138,7 @@ func (h *Handler) createAccount(w http.ResponseWriter, ba *block.BlockAccount, a
 	}
 	log.Debug("trying to send transaction", "hash", tx.GetHash())
 
-	if _, err = h.sendMessage("POST", "/node/message", body); err != nil {
+	if _, err = h.sendMessage("POST", resource.URLTransactions, body); err != nil {
 		return
 	}
 
@@ -187,11 +188,19 @@ End:
 		return
 	}
 
-	err = fmt.Errorf("failed to create account: hash=%s", tx.GetHash())
+	err = fmt.Errorf("account could be verified, timeouted; transaction=%s", tx.GetHash())
 	return
 }
 
 func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	address := mux.Vars(r)["address"]
 
 	var err error

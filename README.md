@@ -35,17 +35,17 @@ $ sebak-anglebot run \
 
 ## Usage
 
-Just send a transaction to angelbot. If you want to create new account that has,
+Just request to angelbot. If you want to create new account that has,
 
-* Address: GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M
+* Address: `GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M`
 * Initial balance: `100,000 BOS`(`1,000,000,000,000 GON`)
+
+> You can make new keypair with [sebak](https://github.com/bosnet/sebak) or  [stellar SDK](https://www.stellar.org/developers/reference/). SEBAK shared with the same keypair with [stellar](https://www.stellar.org/developers/).
 
 ```
 $ time curl \
     --insecure \
     -s \
-    -XPOST \
-    -d '' \
     "https://localhost:8090/account/GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M"
 ```
 
@@ -55,8 +55,6 @@ You can set the initial `balance` by querystring, `balance=9990000000`, `999 BOS
 $ time curl \
     --insecure \
     -s \
-    -XPOST \
-    -d '' \
     "https://localhost:8090/account/GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M?balance=9990000000"
 ```
 
@@ -66,8 +64,6 @@ You can set the `timeout` by querystring, it will wait until when account is cre
 $ time curl \
     --insecure \
     -s \
-    -XPOST \
-    -d '' \
     "https://localhost:8090/account/GA5DR66ZVT7SFAQWRQYPI5V6XNCCWN57Y4HP4CNBBGH4LFHQMT7TTE6M?balance=9990000000&timeout=1s"
 ```
 > The timeout format can be found at https://golang.org/pkg/time/#ParseDuration .

@@ -24,6 +24,10 @@ const (
 	defaultWaitTimeout time.Duration = 60 * time.Second
 )
 
+var (
+	maxBalance = common.BaseReserve.MustMult(5)
+)
+
 type Handler struct {
 	kp            *keypair.Full
 	sebakEndpoint *common.Endpoint
@@ -215,6 +219,9 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if balance < common.BaseReserve {
 		httputils.WriteJSONError(w, errors.OperationAmountUnderflow)
+		return
+	} else if balance > maxBalance {
+		httputils.WriteJSONError(w, errors.OperationAmountOverflow)
 		return
 	}
 

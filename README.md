@@ -22,7 +22,7 @@ If you environment is,
 * sebak-angelbot will be running on: https://localhost:23456
 
 ```
-$ sebak-anglebot run \
+$ sebak-angelbot run \
 	--bind localhost:23456 \
 	--network-id 'test-sebak-network' \
 	--secret-seed SBXBRFM4UDBHREM2XRM6IIOXNR52N6NAKWIMR7MR4XMNJ5VA4WC27QDY \

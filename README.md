@@ -9,6 +9,7 @@ This is the helper to use SEBAK *Testnet*
 ## Installation
 
 ```
+$ go get -u boscoin.io/sebak
 $ go get github.com/spikeekips/sebak-angelbot
 ```
 

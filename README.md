@@ -9,8 +9,10 @@ This is the helper to use SEBAK *Testnet*
 ## Installation
 
 ```
+$ git clone https://github.com/spikeekips/sebak-angelbot
+$ cd sebak-angelbot
 $ go get -u boscoin.io/sebak
-$ go get github.com/spikeekips/sebak-angelbot
+$ go build
 ```
 
 ## Deploy

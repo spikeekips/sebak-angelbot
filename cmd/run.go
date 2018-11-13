@@ -183,6 +183,10 @@ func run() {
 	}
 	router := mux.NewRouter()
 	router.HandleFunc("/account/{address}", handler.accountHandler).Methods("POST", "GET", "OPTIONS")
+  router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+	  w.WriteHeader(http.StatusOK)
+	  w.Write([]byte("OK"))
+  })
 	server.Handler = handlers.CombinedLoggingHandler(os.Stdout, router)
 
 	var err error

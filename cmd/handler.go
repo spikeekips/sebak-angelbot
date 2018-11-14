@@ -14,6 +14,7 @@ import (
 	"boscoin.io/sebak/lib/block"
 	"boscoin.io/sebak/lib/common"
 	"boscoin.io/sebak/lib/errors"
+	"boscoin.io/sebak/lib/network"
 	"boscoin.io/sebak/lib/network/httputils"
 	"boscoin.io/sebak/lib/node/runner/api/resource"
 	"boscoin.io/sebak/lib/transaction"
@@ -24,11 +25,8 @@ const (
 	defaultWaitTimeout time.Duration = 60 * time.Second
 )
 
-var (
-	maxBalance = common.BaseReserve.MustMult(5)
-)
-
 type Handler struct {
+	am            *AccountManager
 	kp            *keypair.Full
 	sebakEndpoint *common.Endpoint
 	networkID     []byte
@@ -87,6 +85,25 @@ func (h *Handler) sendMessage(method, path string, message []byte) (b []byte, er
 	return
 }
 
+func getAccount(client *network.HTTP2NetworkClient, address string) (ba *block.BlockAccount, err error) {
+	var b []byte
+	if b, err = client.Get("/api/v1/accounts/" + address); err != nil {
+		return
+	}
+
+	var c map[string]interface{}
+	if err = common.DecodeJSONValue(b, &c); err != nil {
+		return
+	}
+
+	ba = &block.BlockAccount{
+		Address: c["address"].(string),
+		Balance: common.MustAmountFromString(c["balance"].(string)),
+	}
+
+	return
+}
+
 func (h *Handler) getAccount(address string) (ba *block.BlockAccount, err error) {
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
@@ -102,6 +119,25 @@ func (h *Handler) getAccount(address string) (ba *block.BlockAccount, err error)
 		}
 		return
 	}
+
+	return
+}
+
+func createAccountTransaction(networkID []byte, kp *keypair.Full, sequenceID uint64, timeout time.Duration, accounts ...ReadyAccount) (tx transaction.Transaction, err error) {
+	var ops []operation.Operation
+	for _, ra := range accounts {
+		opb := operation.NewCreateAccount(ra.Address, ra.Balance, "")
+		op := operation.Operation{
+			H: operation.Header{
+				Type: operation.TypeCreateAccount,
+			},
+			B: opb,
+		}
+		ops = append(ops, op)
+	}
+
+	tx, err = transaction.NewTransaction(kp.Address(), sequenceID, ops...)
+	tx.Sign(kp, networkID)
 
 	return
 }
@@ -205,6 +241,12 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cn, ok := w.(http.CloseNotifier)
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
 	address := mux.Vars(r)["address"]
 
 	var err error
@@ -220,7 +262,7 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 	if balance < common.BaseReserve {
 		httputils.WriteJSONError(w, errors.OperationAmountUnderflow)
 		return
-	} else if balance > maxBalance {
+	} else if balance > common.BaseReserve {
 		httputils.WriteJSONError(w, errors.OperationAmountOverflow)
 		return
 	}
@@ -251,29 +293,63 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var baMaster *block.BlockAccount
-	if baMaster, err = h.getAccount(kp.Address()); err != nil {
-		log.Debug("failed to get master account", "address", kp.Address())
-		httputils.WriteJSONError(w, errors.BlockAccountDoesNotExists)
-		return
-	}
+	h.am.CreateAccount(address, balance)
 
 	var baCreated *block.BlockAccount
-	if baCreated, err = h.createAccount(w, baMaster, address, balance, timeout); err != nil {
-		log.Error(err.Error(), "address", address)
-		httputils.WriteJSONError(w, err)
-		return
+
+	timer := time.NewTimer(timeout)
+
+	log.Debug("checking new account", "address", address)
+	var created bool
+	for {
+		select {
+		case <-cn.CloseNotify():
+			goto End
+		case <-timer.C:
+			err = fmt.Errorf("account could be verified, timeouted")
+			goto End
+		default:
+			time.Sleep(time.Second * 1)
+
+			// check BlockTransactionHistory
+			if baCreated, err = h.getAccount(address); err == nil {
+				if baCreated.Balance != balance {
+					err = fmt.Errorf("failed to create account")
+					log.Error(
+						"failed to create new account, balance mismatch",
+						"address", address,
+						"created balance", baCreated.Balance,
+						"expected balance", balance,
+					)
+				} else {
+					created = true
+					log.Debug("new account is created successfully", "address", address)
+				}
+
+				goto End
+			}
+		}
+	}
+
+End:
+	if created {
+		err = nil
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusOK)
-
-	var body []byte
-	if body, err = common.JSONMarshalIndent(baCreated); err != nil {
-		log.Debug("failed to serialize BlockAccount", "error", err)
+	if err != nil {
+		w.WriteHeader(http.StatusOK)
 		httputils.WriteJSONError(w, err)
-		return
-	}
+	} else {
+		w.WriteHeader(http.StatusCreated)
 
-	w.Write(append(body, []byte("\n")...))
+		var body []byte
+		if body, err = common.JSONMarshalIndent(baCreated); err != nil {
+			log.Debug("failed to serialize BlockAccount", "error", err)
+			httputils.WriteJSONError(w, err)
+			return
+		}
+
+		w.Write(append(body, []byte("\n")...))
+	}
 }

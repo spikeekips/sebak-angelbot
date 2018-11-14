@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/handlers"
@@ -12,6 +16,7 @@ import (
 	logging "github.com/inconshreveable/log15"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/keypair"
+	"github.com/ulule/limiter"
 	"golang.org/x/net/http2"
 
 	cmdcommon "boscoin.io/sebak/cmd/sebak/common"
@@ -28,26 +33,34 @@ const (
 )
 
 var (
-	flagSecretSeed          string = common.GetENVValue("SEBAK_SECRET_SEED", "")
-	flagNetworkID           string = common.GetENVValue("SEBAK_NETWORK_ID", "")
-	flagLogLevel            string = common.GetENVValue("SEBAK_LOG_LEVEL", defaultLogLevel.String())
-	flagLogOutput           string = common.GetENVValue("SEBAK_LOG_OUTPUT", "")
-	flagVerbose             bool   = common.GetENVValue("SEBAK_VERBOSE", "0") == "1"
-	flagBind                string = common.GetENVValue("SEBAK_BIND", defaultBind)
-	flagSEBAKEndpointString string = common.GetENVValue("SEBAK_SEBAK_ENDPOINT", defaultSEBAKEndpoint)
-	flagTLSCertFile         string = common.GetENVValue("SEBAK_TLS_CERT", "sebak.crt")
-	flagTLSKeyFile          string = common.GetENVValue("SEBAK_TLS_KEY", "sebak.key")
+	flagSecretSeed          string              = common.GetENVValue("SEBAK_SECRET_SEED", "")
+	flagNetworkID           string              = common.GetENVValue("SEBAK_NETWORK_ID", "")
+	flagLogLevel            string              = common.GetENVValue("SEBAK_LOG_LEVEL", defaultLogLevel.String())
+	flagLogOutput           string              = common.GetENVValue("SEBAK_LOG_OUTPUT", "")
+	flagVerbose             bool                = common.GetENVValue("SEBAK_VERBOSE", "0") == "1"
+	flagBind                string              = common.GetENVValue("SEBAK_BIND", defaultBind)
+	flagSEBAKEndpointString string              = common.GetENVValue("SEBAK_SEBAK_ENDPOINT", defaultSEBAKEndpoint)
+	flagTLSCertFile         string              = common.GetENVValue("SEBAK_TLS_CERT", "sebak.crt")
+	flagTLSKeyFile          string              = common.GetENVValue("SEBAK_TLS_KEY", "sebak.key")
+	flagSources             string              = common.GetENVValue("SEBAK_SOURCES", "")
+	flagRateLimit           cmdcommon.ListFlags // "SEBAK_RATE_LIMIT"
 )
 
 var (
 	runCmd *cobra.Command
 
-	kp            *keypair.Full
-	sebakEndpoint *common.Endpoint
-	bindURL       *url.URL
-	logLevel      logging.Lvl
-	log           logging.Logger
-	verbose       bool
+	kp               *keypair.Full
+	sebakEndpoint    *common.Endpoint
+	bindURL          *url.URL
+	logLevel         logging.Lvl
+	log              logging.Logger
+	sources          map[string]*Account = map[string]*Account{}
+	verbose          bool
+	rateLimitRule    common.RateLimitRule
+	defaultRateLimit limiter.Rate = limiter.Rate{
+		Period: 1 * time.Minute,
+		Limit:  100,
+	}
 )
 
 func init() {
@@ -72,6 +85,12 @@ func init() {
 	runCmd.Flags().StringVar(&flagBind, "bind", flagBind, "bind address")
 	runCmd.Flags().StringVar(&flagTLSCertFile, "tls-cert", flagTLSCertFile, "tls certificate file")
 	runCmd.Flags().StringVar(&flagTLSKeyFile, "tls-key", flagTLSKeyFile, "tls key file")
+	runCmd.Flags().StringVar(&flagSources, "sources", flagSources, "source account list file")
+	runCmd.Flags().Var(
+		&flagRateLimit,
+		"rate-limit",
+		"rate limit: [<ip>=]<limit>-<period>, ex) '10-S' '3.3.3.3=1000-M'",
+	)
 
 	rootCmd.AddCommand(runCmd)
 }
@@ -114,6 +133,47 @@ func parseFlagsNode() {
 		}
 	}
 
+	if len(flagSources) < 1 {
+		cmdcommon.PrintFlagsError(runCmd, "--sources", errors.New("must be given"))
+	}
+
+	sourcesF, err := os.Open(flagSources)
+	if err != nil {
+		cmdcommon.PrintFlagsError(runCmd, "--sources", err)
+	}
+
+	{
+		scanner := bufio.NewScanner(sourcesF)
+		for scanner.Scan() {
+			s := scanner.Text()
+			sp := strings.Fields(s)
+			if len(sp) < 1 {
+				cmdcommon.PrintFlagsError(runCmd, "--sources", fmt.Errorf("invalid line found: '%s'", s))
+			}
+			kp, err := keypair.Parse(sp[0])
+			if err != nil {
+				cmdcommon.PrintFlagsError(runCmd, "--sources", err)
+			}
+			kpFull, ok := kp.(*keypair.Full)
+			if !ok {
+				cmdcommon.PrintFlagsError(runCmd, "--sources", fmt.Errorf("invalid secret seed found: '%s'", s))
+			}
+
+			sources[kpFull.Address()] = &Account{KP: kpFull}
+		}
+		if err := scanner.Err(); err != nil {
+			cmdcommon.PrintFlagsError(runCmd, "--sources", err)
+		}
+	}
+	if len(sources) < 1 {
+		cmdcommon.PrintFlagsError(runCmd, "--sources", errors.New("sources are empty"))
+	}
+
+	rateLimitRule, err = parseFlagRateLimit(flagRateLimit, defaultRateLimit)
+	if err != nil {
+		cmdcommon.PrintFlagsError(runCmd, "--rate-limit", err)
+	}
+
 	queries := sebakEndpoint.Query()
 	queries.Add("TLSCertFile", flagTLSCertFile)
 	queries.Add("TLSKeyFile", flagTLSKeyFile)
@@ -150,6 +210,7 @@ func parseFlagsNode() {
 	parsedFlags = append(parsedFlags, "\n\ttls-key", flagTLSKeyFile)
 	parsedFlags = append(parsedFlags, "\n\tlog-level", flagLogLevel)
 	parsedFlags = append(parsedFlags, "\n\tlog-output", flagLogOutput)
+	parsedFlags = append(parsedFlags, "\n\tsources", len(sources))
 
 	log.Debug("parsed flags:", parsedFlags...)
 
@@ -170,18 +231,74 @@ func parseFlagsNode() {
 	}
 }
 
+func parseFlagRateLimit(l cmdcommon.ListFlags, defaultRate limiter.Rate) (rule common.RateLimitRule, err error) {
+	if len(l) < 1 {
+		rule = common.NewRateLimitRule(defaultRate)
+		return
+	}
+
+	var givenRate limiter.Rate
+
+	byIPAddress := map[string]limiter.Rate{}
+	for _, s := range l {
+		sl := strings.SplitN(s, "=", 2)
+
+		var ip, r string
+		if len(sl) < 2 {
+			r = s
+		} else {
+			ip = sl[0]
+			r = sl[1]
+		}
+
+		if len(ip) > 0 {
+			if net.ParseIP(ip) == nil {
+				err = fmt.Errorf("invalid ip address")
+				return
+			}
+		}
+
+		var rate limiter.Rate
+		if rate, err = limiter.NewRateFromFormatted(r); err != nil {
+			return
+		}
+
+		if len(ip) > 0 {
+			byIPAddress[ip] = rate
+		} else {
+			givenRate = rate
+		}
+	}
+
+	if givenRate.Period < 1 && givenRate.Limit < 1 {
+		givenRate = defaultRate
+	}
+
+	rule = common.NewRateLimitRule(givenRate)
+	rule.ByIPAddress = byIPAddress
+
+	return
+}
+
 func run() {
+	am := NewAccountManager([]byte(flagNetworkID), kp, sebakEndpoint, sources)
+	am.Start()
+
 	server := &http.Server{Addr: bindURL.Host}
 	server.SetKeepAlivesEnabled(false)
 
 	http2.ConfigureServer(server, &http2.Server{})
 
 	handler := &Handler{
+		am:            am,
 		kp:            kp,
 		sebakEndpoint: sebakEndpoint,
 		networkID:     []byte(flagNetworkID),
 	}
 	router := mux.NewRouter()
+
+	router.Use(network.RateLimitMiddleware(log, rateLimitRule))
+
 	router.HandleFunc("/account/{address}", handler.accountHandler).Methods("POST", "GET", "OPTIONS")
 	server.Handler = handlers.CombinedLoggingHandler(os.Stdout, router)
 

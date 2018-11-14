@@ -17,6 +17,28 @@ $ go build
 
 ## Deploy
 
+```sh
+$ ./sebak-angelbot run -h
+run sebak-angelbot
+
+Usage:
+  ./sebak-angelbot run [flags]
+
+Flags:
+      --bind string             bind address (default "http://localhost:23456")
+  -h, --help                    help for run
+      --log-level string        log level, {crit, error, warn, info, debug} (default "info")
+      --log-output string       set log output file
+      --network-id string       network id
+      --rate-limit list         rate limit: [<ip>=]<limit>-<period>, ex) '10-S' '3.3.3.3=1000-M'
+      --sebak-endpoint string   sebak endpoint uri (default "https://localhost:12345")
+      --secret-seed string      secret seed of master account
+      --sources string          source account list file
+      --tls-cert string         tls certificate file (default "sebak.crt")
+      --tls-key string          tls key file (default "sebak.key")
+      --verbose                 verbose
+```
+
 If you environment is,
 
 * sebak node is running on: https://localhost:12345
@@ -26,15 +48,23 @@ If you environment is,
 
 ```
 $ sebak-angelbot run \
-	--bind localhost:23456 \
+	--bind http://0.0.0.0:23456 \
 	--network-id 'test-sebak-network' \
 	--secret-seed SBXBRFM4UDBHREM2XRM6IIOXNR52N6NAKWIMR7MR4XMNJ5VA4WC27QDY \
 	--log-level debug \
-	--tls-cert ./sebak.crt \
-	--tls-key ./sebak.key  \
 	--sebak-endpoint https://localhost:12345 \
+    --sources /tmp/sources.txt \
     $*
 ```
+
+* `--sources` should be set, this file contains the list of secret seed to distribute balances for new account.
+
+```
+SBO3ATFYI2VALX3CEMF5YYR6EYHLRQV5NBFM7THO2ZFFEFXSYQUQGUVJ
+SDEYGI6HT6IAZ7FR5ZAPOBM2GPYXMVPHK67OAAWQVDINUYM2QTWYBYFT
+```
+
+You can set secret seeds as many as you want.
 
 ## Usage
 

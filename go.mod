@@ -2,7 +2,7 @@ module github.com/spikeekips/sebak-angelbot
 
 require (
 	9fans.net/go v0.0.0-20180727211846-5d4fa602e1e8 // indirect
-	boscoin.io/sebak v0.0.0-20181110042651-ed5458f6df19
+	boscoin.io/sebak v0.0.0-20181114015743-a9b936755bb5
 	github.com/alecthomas/gometalinter v2.0.11+incompatible // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/btcsuite/btcd v0.0.0-20181013004428-67e573d211ac // indirect
@@ -34,7 +34,7 @@ require (
 	github.com/pelletier/go-toml v1.2.0 // indirect
 	github.com/peterh/liner v1.1.0 // indirect
 	github.com/prometheus/client_golang v0.9.1 // indirect
-	github.com/prometheus/common v0.0.0-20181109100915-0b1957f9d949 // indirect
+	github.com/prometheus/common v0.0.0-20181113130724-41aa239b4cce // indirect
 	github.com/prometheus/procfs v0.0.0-20181005140218-185b4288413d // indirect
 	github.com/rogpeppe/godef v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.2.0 // indirect
@@ -44,11 +44,11 @@ require (
 	github.com/stellar/go v0.0.0-20181109215909-e836d66da2f4
 	github.com/stellar/go-xdr v0.0.0-20180917104419-0bc96f33a18e // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181105012736-f9080354173f // indirect
-	github.com/ulule/limiter v2.2.1+incompatible // indirect
+	github.com/ulule/limiter v2.2.1+incompatible
 	github.com/zmb3/gogetdoc v0.0.0-20181026013253-9098cf5fc236 // indirect
 	golang.org/x/arch v0.0.0-20180920145803-b19384d3c130 // indirect
 	golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3 // indirect
-	golang.org/x/net v0.0.0-20181108082009-03003ca0c849
+	golang.org/x/net v0.0.0-20181113165502-88d92db4c548
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
 	golang.org/x/sys v0.0.0-20181107165924-66b7b1311ac8 // indirect
 	golang.org/x/tools v0.0.0-20181109202920-92d8274bd7b8 // indirect

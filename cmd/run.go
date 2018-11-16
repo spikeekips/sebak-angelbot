@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ var (
 	flagTLSKeyFile          string              = common.GetENVValue("SEBAK_TLS_KEY", "sebak.key")
 	flagSources             string              = common.GetENVValue("SEBAK_SOURCES", "")
 	flagRateLimit           cmdcommon.ListFlags // "SEBAK_RATE_LIMIT"
+	flagMaxBalance          string              = common.GetENVValue("SEBAK_MAX_BALANCE", defaultMaxBalance)
 )
 
 var (
@@ -61,6 +63,8 @@ var (
 		Period: 1 * time.Minute,
 		Limit:  100,
 	}
+	defaultMaxBalance string = strconv.FormatUint(uint64(common.BaseReserve*100000), 10)
+	maxBalance        common.Amount
 )
 
 func init() {
@@ -86,6 +90,7 @@ func init() {
 	runCmd.Flags().StringVar(&flagTLSCertFile, "tls-cert", flagTLSCertFile, "tls certificate file")
 	runCmd.Flags().StringVar(&flagTLSKeyFile, "tls-key", flagTLSKeyFile, "tls key file")
 	runCmd.Flags().StringVar(&flagSources, "sources", flagSources, "source account list file")
+	runCmd.Flags().StringVar(&flagMaxBalance, "max-balance", flagMaxBalance, "maximum balance for new account")
 	runCmd.Flags().Var(
 		&flagRateLimit,
 		"rate-limit",
@@ -131,6 +136,10 @@ func parseFlagsNode() {
 		if _, err = os.Stat(flagTLSKeyFile); os.IsNotExist(err) {
 			cmdcommon.PrintFlagsError(runCmd, "--tls-key", err)
 		}
+	}
+
+	if maxBalance, err = common.AmountFromString(flagMaxBalance); err != nil {
+		cmdcommon.PrintFlagsError(runCmd, "--max-balance", err)
 	}
 
 	if len(flagSources) < 1 {
@@ -211,6 +220,7 @@ func parseFlagsNode() {
 	parsedFlags = append(parsedFlags, "\n\tlog-level", flagLogLevel)
 	parsedFlags = append(parsedFlags, "\n\tlog-output", flagLogOutput)
 	parsedFlags = append(parsedFlags, "\n\tsources", len(sources))
+	parsedFlags = append(parsedFlags, "\n\tmax-balance", maxBalance)
 
 	log.Debug("parsed flags:", parsedFlags...)
 
@@ -300,10 +310,10 @@ func run() {
 	router.Use(network.RateLimitMiddleware(log, rateLimitRule))
 
 	router.HandleFunc("/account/{address}", handler.accountHandler).Methods("POST", "GET", "OPTIONS")
-  router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-	  w.WriteHeader(http.StatusOK)
-	  w.Write([]byte("OK"))
-  })
+	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 	server.Handler = handlers.CombinedLoggingHandler(os.Stdout, router)
 
 	var err error

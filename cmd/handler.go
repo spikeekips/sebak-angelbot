@@ -262,7 +262,7 @@ func (h *Handler) accountHandler(w http.ResponseWriter, r *http.Request) {
 	if balance < common.BaseReserve {
 		httputils.WriteJSONError(w, errors.OperationAmountUnderflow)
 		return
-	} else if balance > common.BaseReserve {
+	} else if balance > maxBalance {
 		httputils.WriteJSONError(w, errors.OperationAmountOverflow)
 		return
 	}

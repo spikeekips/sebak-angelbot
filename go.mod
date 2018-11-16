@@ -2,7 +2,7 @@ module github.com/spikeekips/sebak-angelbot
 
 require (
 	9fans.net/go v0.0.0-20180727211846-5d4fa602e1e8 // indirect
-	boscoin.io/sebak v0.0.0-20181114015743-a9b936755bb5
+	boscoin.io/sebak v0.0.0-20181116065205-ab8c5cd42c21
 	github.com/alecthomas/gometalinter v2.0.11+incompatible // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/btcsuite/btcd v0.0.0-20181013004428-67e573d211ac // indirect
@@ -10,7 +10,7 @@ require (
 	github.com/cosiner/argv v0.0.0-20170225145430-13bacc38a0a5 // indirect
 	github.com/davidrjenni/reftools v0.0.0-20180914123528-654d0ba4f96d // indirect
 	github.com/derekparker/delve v1.1.0 // indirect
-	github.com/ethereum/go-ethereum v1.8.17 // indirect
+	github.com/ethereum/go-ethereum v1.8.18 // indirect
 	github.com/fatih/gomodifytags v0.0.0-20180914191908-141225bf62b6 // indirect
 	github.com/fatih/motion v0.0.0-20180408211639-218875ebe238 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
@@ -41,14 +41,14 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stamblerre/gocode v0.0.0-20181016172724-12640289f650 // indirect
-	github.com/stellar/go v0.0.0-20181109215909-e836d66da2f4
+	github.com/stellar/go v0.0.0-20181115130144-a3adccc13711
 	github.com/stellar/go-xdr v0.0.0-20180917104419-0bc96f33a18e // indirect
 	github.com/syndtr/goleveldb v0.0.0-20181105012736-f9080354173f // indirect
 	github.com/ulule/limiter v2.2.1+incompatible
 	github.com/zmb3/gogetdoc v0.0.0-20181026013253-9098cf5fc236 // indirect
 	golang.org/x/arch v0.0.0-20180920145803-b19384d3c130 // indirect
 	golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3 // indirect
-	golang.org/x/net v0.0.0-20181113165502-88d92db4c548
+	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a
 	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
 	golang.org/x/sys v0.0.0-20181107165924-66b7b1311ac8 // indirect
 	golang.org/x/tools v0.0.0-20181109202920-92d8274bd7b8 // indirect

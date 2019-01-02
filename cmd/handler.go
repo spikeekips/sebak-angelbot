@@ -92,7 +92,7 @@ func getAccount(client *network.HTTP2NetworkClient, address string) (ba *block.B
 	}
 
 	var c map[string]interface{}
-	if err = common.DecodeJSONValue(b, &c); err != nil {
+	if err = json.Unmarshal(b, &c); err != nil {
 		return
 	}
 
